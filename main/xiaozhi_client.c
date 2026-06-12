@@ -90,7 +90,7 @@ void start_opus_transmit(esp_websocket_client_handle_t client)
 	
     char *json_str = cJSON_PrintUnformatted(root);
     if (json_str) {
-        ESP_LOGI(TAG, "Start listen");
+        ESP_LOGI(TAG, "start_opus_transmit");
         esp_websocket_client_send_text(client, json_str, strlen(json_str), portMAX_DELAY);
         free(json_str);
     }
@@ -107,7 +107,7 @@ void stop_opus_transmit(esp_websocket_client_handle_t client)
 	
     char *json_str = cJSON_PrintUnformatted(root);
     if (json_str) {
-        ESP_LOGI(TAG, "Start listen");
+        ESP_LOGI(TAG, "stop_opus_transmit");
         esp_websocket_client_send_text(client, json_str, strlen(json_str), portMAX_DELAY);
         free(json_str);
     }
@@ -381,16 +381,60 @@ bool xiaozhi_client_is_connected(void)
 	return true;
 }
 
-void xiaozhi_client_send_opuspcm_start(void)
-{
+// 定义事件组
+static EventGroupHandle_t s_event_group;
+#define RECORDER_DONE   (1 << 0)
+
+
+static void recorder_xs_task(void *arg) {
+	uint32_t para = (uint32_t)arg;
+	ESP_LOGI(TAG, "recorder_xs_task run");
 	start_opus_transmit(client);
+    record_pcm_to_queue(para,16000,16,1,user_opusdata_cb);
+	stop_opus_transmit(client);
+	ESP_LOGI(TAG, "recorder_xs_task delete");
+	// 通知完成
+    xEventGroupSetBits(s_event_group, RECORDER_DONE);
+	vTaskDelete(NULL);
+}
+
+
+void xiaozhi_client_send_opuspcm_start(uint32_t rec_time)
+{
+	//start_opus_transmit(client);
 	//vTaskDelay(pdMS_TO_TICKS(100));
-	record_pcm_to_queue(4,16000,16,1,user_opusdata_cb);
+	//record_pcm_to_queue(4,16000,16,1,user_opusdata_cb);
+
+	if(!s_event_group)
+	{
+		s_event_group = xEventGroupCreate();
+		xEventGroupSetBits(s_event_group, RECORDER_DONE);
+	}
+
+	if(rec_time==0)rec_time = 1;
+	if(recorder_running_status()==false)
+	{
+		// 等待上一次录音任务完成
+    	xEventGroupWaitBits(s_event_group, RECORDER_DONE, pdTRUE, pdFALSE, portMAX_DELAY);
+		xTaskCreate(recorder_xs_task, "recoeder_task", 4096, (void *)rec_time, 6, NULL);
+	}
+}
+
+bool xiaozhi_client_recorder_running_status(void)
+{
+	return recorder_running_status();
 }
 
 void xiaozhi_client_send_opuspcm_stop(void)
 {
-	stop_opus_transmit(client);
+	if(recorder_running_status()==true)
+	{
+		recorder_frame_stop();
+		
+	}
+
+	// vTaskDelay(pdMS_TO_TICKS(100));
+	// stop_opus_transmit(client);
 }
 
 

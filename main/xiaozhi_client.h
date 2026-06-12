@@ -17,8 +17,8 @@
 esp_err_t xiaozhi_client_config_and_start(void);
 void xiaozhi_client_clear_and_stop(void);
 bool xiaozhi_client_is_connected(void);
-void xiaozhi_client_send_opuspcm_start(void);
+void xiaozhi_client_send_opuspcm_start(uint32_t rec_time);
 void xiaozhi_client_send_opuspcm_stop(void);
 bool xiaozhi_client_send_text(const char *text);
-
+bool xiaozhi_client_recorder_running_status(void);
 #endif
