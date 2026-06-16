@@ -22,6 +22,8 @@
 #include "lvgl.h"
 #include "lv_demos.h"
 #include "mjpeg_ui.h"
+#include "myfont_ui.h"
+
 #include "esp_lv_decoder.h"
 
 #include "my_wifi.h"
@@ -59,7 +61,18 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char * pcTaskName ) {
     while (1);
 }
 
+
+
+
+
+
 void lvgl_task(void *arg) {
+	//lv_demo_stress();
+	//lv_demo_widgets();
+	//ui_mjpeg_create();
+	ui_show_hz();
+	
+
     while (1) {
         lv_timer_handler();
         vTaskDelay(5);
@@ -131,10 +144,10 @@ void app_main(void) {
     return;
 	}
 
-	//lv_demo_stress();
-	//lv_demo_widgets();
-	ui_mjpeg_create();
+	
 
+
+	
     xTaskCreate(lvgl_task, "lvgl", 8192, NULL, 5, NULL);
 	
 	ESP_LOGI(TAG,"demo run!");
@@ -160,7 +173,7 @@ void app_main(void) {
 	// 启动 WebSocket 客户端
 	xiaozhi_client_config_and_start();
 
-
+	write_text_to_label(" !#$%&'()*+,-./:;<=>?@[\]^_`{|}~");
 	while(1)
 	{
 		static bool oldsta = false;
@@ -168,7 +181,6 @@ void app_main(void) {
 
 		if(newsta!=oldsta)
 		{
-			debug_memory_leak();
 			oldsta = newsta;
 			if(oldsta)ws2812_set_color(0, 50, 0);
 			else ws2812_set_color(0, 0, 0);
@@ -181,18 +193,21 @@ void app_main(void) {
 			
 			if(xiaozhi_client_is_connected()==false)
 			{
+				debug_memory_leak();
 				ws2812_set_color(0, 0, 50);
 				ESP_LOGI(TAG, "WebSocket Reconnect!");
 				xiaozhi_client_config_and_start();
 				vTaskDelay(pdMS_TO_TICKS(2000));
 			}
-			xiaozhi_client_send_opuspcm_start(5);
-			//xiaozhi_client_send_text("播放音乐");
+
+			// xiaozhi_client_send_opuspcm_start(5);
+			//xiaozhi_client_send_text("开灯");
+			xiaozhi_client_send_text("当前温度湿度为多少");
 		}
 		else if(key_val == BOOT_RELEASE)
 		{
 			vTaskDelay(pdMS_TO_TICKS(500));
-			xiaozhi_client_send_opuspcm_stop();
+			//xiaozhi_client_send_opuspcm_stop();
 		}
 	}
 	

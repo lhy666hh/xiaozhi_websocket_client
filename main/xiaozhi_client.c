@@ -225,6 +225,7 @@ static void opus_binary_decorder_player(esp_websocket_event_data_t *data)
 }
 
 #include "audio_recorder.h"
+#include "myfont_ui.h"
 static esp_websocket_client_handle_t client = NULL;
 
 
@@ -268,6 +269,7 @@ static void user_jsontext_cb(esp_websocket_event_data_t *data,esp_websocket_clie
 				if (strcmp(state->valuestring, "sentence_start") == 0) {
 					ESP_LOGI(TAG, "AI says: %s", text->valuestring);
 					// 可在此处将文本显示到屏幕
+					write_text_to_label(text->valuestring);
 				}
 			}
 		} else if (strcmp(type->valuestring, "goodbye") == 0) {

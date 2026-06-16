@@ -22,4 +22,5 @@ dependencies:
   espressif/cjson: ^1.0.0
   espressif/esp_websocket_client: ^1.6.0
   esphome/micro-opus: ^0.4.1
+  espressif/freetype: "^2.13.3~1"
   #78/esp-opus: ^1.0.5

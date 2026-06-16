@@ -1,8 +1,10 @@
 set(src_dirs
-			jpeg)
+			jpeg
+			lvgl_ui)
 
 set(include_dirs
-			jpeg)
+			jpeg
+			lvgl_ui)
 
 set(requires
             driver
@@ -11,7 +13,8 @@ set(requires
 			sdmmc
 			esp_codec_dev
 			es8311
-			lvgl)
+			lvgl
+			BSP)
 
 
 idf_component_register(SRC_DIRS ${src_dirs}
