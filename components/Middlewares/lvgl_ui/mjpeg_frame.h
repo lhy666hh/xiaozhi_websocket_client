@@ -2,7 +2,7 @@
 #define __MJPEG_FRAME_H
 #include <stdint.h>
 #include <string.h>
-
+#include <stdbool.h>
 //jpeg图像数据
 typedef struct 
 {
@@ -23,5 +23,7 @@ void jpeg_frame_start(const char* filename);
 void jpeg_frame_stop(void);
 
 void jpeg_frame_get_one(jpeg_frame_data_t *data);
+
+bool jpeg_frame_running_status(void);
 
 #endif

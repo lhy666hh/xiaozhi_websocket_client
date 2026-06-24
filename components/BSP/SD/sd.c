@@ -92,8 +92,10 @@ int sdcard_filelist(const char(**file)[256])
 	while((entry = readdir(dir))!=NULL)
 	{
 		snprintf(&filename[file_cnt][0],256,"%s",entry->d_name);
+		printf("file:%s\n",entry->d_name);
 		file_cnt++;
 		if(file_cnt>=20)break;
+		
 	}
 	*file = filename;
 	return file_cnt;

@@ -18,6 +18,7 @@ static int mjpeg_stared = 0;//正在工作标志
 
 #define START_GET_EV  BIT0
 #define STOP_GET_EV   BIT1
+#define EXIT_GET_EV   BIT2
 
 static EventGroupHandle_t mjpeg_event;
 static QueueHandle_t mjpeg_queue;
@@ -31,12 +32,17 @@ void jpeg_frame_config(jpeg_frame_cfg_t *cfg)
 	memcpy(&s_mjpeg_cfg,cfg,sizeof(jpeg_frame_cfg_t));
 	mjpeg_inited = 1;
 
-	if(!mjpeg_event)mjpeg_event = xEventGroupCreate();
+	if(!mjpeg_event)
+	{
+		mjpeg_event = xEventGroupCreate();
+		if(mjpeg_event)xEventGroupSetBits(mjpeg_event,EXIT_GET_EV);
+	}
 	if(!mjpeg_queue)mjpeg_queue = xQueueCreate(5,sizeof(jpeg_frame_data_t));
 }
 
 static void jpeg_frame_task(void* param)
 {
+	if(mjpeg_event)xEventGroupClearBits(mjpeg_event,EXIT_GET_EV|STOP_GET_EV|START_GET_EV);
 	const char* filename = (const char*)param;
 	FILE* f = fopen(filename,"r");
 	uint8_t *read_buf = NULL;
@@ -52,6 +58,8 @@ static void jpeg_frame_task(void* param)
 		ESP_LOGI(TAG,"read_buf malloc failed!");
 		goto mjpeg_task_return;
 	}
+
+	
 
 	int jpeg_started = 0;//表示当前的检索循环已经找到标头了
 	size_t read_bytes = 0;//每次实际读取到的字节数
@@ -94,7 +102,7 @@ static void jpeg_frame_task(void* param)
 				}
 				frame_write_index += write_len;
 
-
+				bool send_frame_buff_ok = false;
 				jpeg_frame_data_t frame_data;
 				frame_data.frame = frame_buff;
 				frame_data.len = frame_write_index;
@@ -102,10 +110,11 @@ static void jpeg_frame_task(void* param)
 				if(ev&START_GET_EV)
 				{
 					xQueueSend(mjpeg_queue,&frame_data,portMAX_DELAY);
+					send_frame_buff_ok = true;
 				}
 				if(ev&STOP_GET_EV)
 				{
-					if(frame_buff)
+					if(frame_buff&&send_frame_buff_ok==false)
 						free(frame_buff);
 					ESP_LOGI(TAG,"STOP_GET_EV!");
 					goto mjpeg_task_return;
@@ -152,11 +161,13 @@ mjpeg_task_return:
 	}
 	if(f)fclose(f);
 	mjpeg_stared = 0;
+	if(mjpeg_event)xEventGroupSetBits(mjpeg_event,EXIT_GET_EV);
 	vTaskDelete(NULL);
 }
 
 void jpeg_frame_start(const char* filename)
 {
+	if(jpeg_frame_running_status()==true)return;
 	if(!mjpeg_inited)return;
 	if(mjpeg_stared)return;
 
@@ -168,7 +179,18 @@ void jpeg_frame_start(const char* filename)
 
 void jpeg_frame_stop(void)
 {
-	xEventGroupSetBits(mjpeg_event,STOP_GET_EV);
+	if(mjpeg_stared)xEventGroupSetBits(mjpeg_event,STOP_GET_EV);
+}
+
+bool jpeg_frame_running_status(void)
+{
+	if(mjpeg_event)
+	{
+		EventBits_t ev = xEventGroupWaitBits(mjpeg_event,EXIT_GET_EV,pdFALSE,pdFALSE,0);
+		if(ev&EXIT_GET_EV)return false;
+		else return true;
+	}
+	return false;
 }
 
 void jpeg_frame_get_one(jpeg_frame_data_t *data)

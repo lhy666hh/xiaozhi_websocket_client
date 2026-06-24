@@ -143,7 +143,7 @@ void ui_mjpeg_create(void)
 	lv_label_set_text(file_title,"SD File");
 	lv_obj_set_size(file_title,hor_res-60,30);
 	lv_obj_align(file_title,LV_ALIGN_TOP_MID,0,10);
-	lv_obj_set_style_text_font(file_title,&lv_font_montserrat_24,0);
+	lv_obj_set_style_text_font(file_title,&lv_font_montserrat_20,0);
 	lv_obj_set_style_text_color(file_title,lv_color_black(),0);
 	lv_obj_set_style_bg_color(file_title,lv_color_white(),0);
 	lv_obj_set_style_bg_opa(file_title,LV_OPA_COVER,0);
@@ -151,7 +151,7 @@ void ui_mjpeg_create(void)
 	file_list = lv_list_create(file_page);
 	lv_obj_set_size(file_list,hor_res-60,ver_res-90);
 	lv_obj_align(file_list,LV_ALIGN_BOTTOM_MID,0,-40);
-	lv_obj_set_style_text_font(file_list,&lv_font_montserrat_24,0);
+	lv_obj_set_style_text_font(file_list,&lv_font_montserrat_20,0);
 	lv_obj_set_style_text_color(file_list,lv_color_black(),0);
 	lv_obj_set_style_bg_color(file_list,lv_color_white(),0);
 	lv_obj_set_style_bg_opa(file_list,LV_OPA_COVER,0);

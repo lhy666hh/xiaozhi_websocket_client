@@ -4,18 +4,172 @@
 #include "cJSON.h"
 #include "opus.h"
 #include "audio_player.h"
-
+#include "rgb.h"
 static const char *TAG = "XIAOZHI_CLIENT";
 
 #define WS_URI "ws://192.168.1.3:8000/xiaozhi/v1/"
 #define DEVICE_ID "esp32-client"
 // 帧参数：16kHz * 60ms = 960 样本/帧
 #define OPUS_FRAME_SAMPLES 960
+
+
+// MCP 工具回调函数类型：接收参数 JSON，返回结果 JSON（调用者负责释放）
+typedef esp_err_t (*mcp_tool_callback_t)(cJSON *params, cJSON **result);
+
+
+// 工具注册项（增加 inputSchema）
+typedef struct {
+    const char *name;
+    const char *description;
+    cJSON *input_schema;          // 参数 JSON Schema（由注册时创建）
+    mcp_tool_callback_t callback;
+} mcp_tool_t;
+
+// 静态工具表（最大支持 5 个工具，可调整）
+#define MAX_MCP_TOOLS 5
+static mcp_tool_t s_mcp_tools[MAX_MCP_TOOLS];
+static int s_mcp_tool_count = 0;
+
+
+
+
 //static esp_websocket_client_handle_t s_client = NULL;
 static OpusDecoder *s_decoder = NULL;
 static int s_frame_size = 0;      // 每帧样本数
 static int s_sample_rate = 16000; // 从服务器 hello 响应中获取
 static int s_channels = 1;
+
+
+// 注册一个 MCP 工具
+esp_err_t mcp_register_tool(const char *name, const char *description, 
+                            cJSON *input_schema, mcp_tool_callback_t callback)
+{
+    if (s_mcp_tool_count >= MAX_MCP_TOOLS) {
+        ESP_LOGE(TAG, "MCP tool table full");
+        return ESP_ERR_NO_MEM;
+    }
+    s_mcp_tools[s_mcp_tool_count].name = name;
+    s_mcp_tools[s_mcp_tool_count].description = description;
+    s_mcp_tools[s_mcp_tool_count].input_schema = input_schema; // 由调用者创建，生命周期由工具表管理
+    s_mcp_tools[s_mcp_tool_count].callback = callback;
+    s_mcp_tool_count++;
+    ESP_LOGI(TAG, "MCP tool registered: %s", name);
+    return ESP_OK;
+}
+
+// 根据名称查找工具（内部使用）
+static mcp_tool_t *mcp_find_tool(const char *name)
+{
+    for (int i = 0; i < s_mcp_tool_count; i++) {
+        if (strcmp(s_mcp_tools[i].name, name) == 0)
+            return &s_mcp_tools[i];
+    }
+    return NULL;
+}
+
+// 示例工具：设置 LED 状态
+static esp_err_t mcp_tool_led_set_state(cJSON *params, cJSON **result)
+{
+    // 1. 解析参数
+    cJSON *gpio_json = cJSON_GetObjectItem(params, "gpio_num");
+    cJSON *state_json = cJSON_GetObjectItem(params, "state");
+    if (!gpio_json || !cJSON_IsNumber(gpio_json) ||
+        !state_json || !cJSON_IsNumber(state_json)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    int gpio_num = gpio_json->valueint;
+    int state = state_json->valueint;
+
+    // 2. 执行硬件操作（初始化 GPIO 可放在启动时）
+    //gpio_set_level(gpio_num, state);
+	if(state==0)ws2812_set_color(0,0,0);
+	else ws2812_set_color(100,100,100);
+    ESP_LOGI(TAG, "MCP: LED on GPIO%d set to %d", gpio_num, state);
+
+    // 3. 构造成功结果（符合 MCP 规范：包含 content 和 isError）
+    *result = cJSON_CreateObject();
+    cJSON_AddItemToObject(*result, "content", cJSON_CreateArray()); // 无附加内容
+    cJSON_AddBoolToObject(*result, "isError", false);
+    return ESP_OK;
+}
+
+// 发送 MCP 错误响应
+static void send_mcp_error(esp_websocket_client_handle_t client, cJSON *id, int code, const char *message)
+{
+    cJSON *error_obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(error_obj, "code", code);
+    cJSON_AddStringToObject(error_obj, "message", message);
+
+    // 内层 payload
+    cJSON *payload = cJSON_CreateObject();
+    cJSON_AddStringToObject(payload, "jsonrpc", "2.0");
+    if (id) {
+        cJSON_AddItemToObject(payload, "id", cJSON_Duplicate(id, 1));
+    } else {
+        cJSON_AddNullToObject(payload, "id");
+    }
+    cJSON_AddItemToObject(payload, "error", error_obj);
+
+    // 外层
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "type", "mcp");
+    cJSON_AddItemToObject(response, "payload", payload);
+
+    char *resp_str = cJSON_PrintUnformatted(response);
+    if (resp_str) {
+        esp_websocket_client_send_text(client, resp_str, strlen(resp_str), portMAX_DELAY);
+        free(resp_str);
+    }
+    cJSON_Delete(response);
+}
+// static void send_mcp_error(esp_websocket_client_handle_t client, cJSON *id, int code, const char *message)
+// {
+//     cJSON *error_obj = cJSON_CreateObject();
+//     cJSON_AddNumberToObject(error_obj, "code", code);
+//     cJSON_AddStringToObject(error_obj, "message", message);
+
+//     cJSON *response = cJSON_CreateObject();
+//     cJSON_AddStringToObject(response, "type", "mcp");
+//     if (id) {
+//         cJSON_AddItemToObject(response, "id", cJSON_Duplicate(id, 1));
+//     }
+//     cJSON_AddItemToObject(response, "error", error_obj);
+
+//     char *resp_str = cJSON_PrintUnformatted(response);
+//     if (resp_str) {
+//         esp_websocket_client_send_text(client, resp_str, strlen(resp_str), portMAX_DELAY);
+//         free(resp_str);
+//     }
+//     cJSON_Delete(response);
+// }
+
+
+void init_mcp_tools(void)
+{
+	// 创建 inputSchema
+	cJSON *schema = cJSON_CreateObject();
+	cJSON *properties = cJSON_CreateObject();
+	cJSON *gpio_prop = cJSON_CreateObject();
+	cJSON_AddStringToObject(gpio_prop, "type", "integer");
+	cJSON_AddStringToObject(gpio_prop, "description", "GPIO number");
+	cJSON_AddItemToObject(properties, "gpio_num", gpio_prop);
+
+	cJSON *state_prop = cJSON_CreateObject();
+	cJSON_AddStringToObject(state_prop, "type", "integer");
+	cJSON_AddStringToObject(state_prop, "description", "0 or 1");
+	cJSON_AddItemToObject(properties, "state", state_prop);
+
+	cJSON_AddItemToObject(schema, "properties", properties);
+	cJSON_AddArrayToObject(schema, "required"); // 可选，可添加 required 列表
+
+	mcp_register_tool("led_set_state", 
+					"Set LED state", 
+					schema,
+					mcp_tool_led_set_state);
+}
+
+
 
 // 发送 hello 消息
 static void send_hello(esp_websocket_client_handle_t client)
@@ -53,6 +207,7 @@ static bool send_listen(esp_websocket_client_handle_t client, const char *text)
 	if((client==NULL)||(esp_websocket_client_is_connected(client)==false))return false;
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "type", "listen");
+	cJSON_AddStringToObject(root, "mode", "manual");
     cJSON_AddStringToObject(root, "state", "detect");
     cJSON_AddStringToObject(root, "text", text);
     char *json_str = cJSON_PrintUnformatted(root);
@@ -283,6 +438,154 @@ static void user_jsontext_cb(esp_websocket_event_data_t *data,esp_websocket_clie
 					
 			}
 		}
+		// ---------- 新增 MCP 处理 ----------
+        else if (strcmp(type->valuestring, "mcp") == 0) {
+			// 取出 payload 字段
+			cJSON *payload = cJSON_GetObjectItem(root, "payload");
+			if (!payload || !cJSON_IsObject(payload)) {
+				ESP_LOGW(TAG, "MCP message missing payload");
+				cJSON_Delete(root);
+				return;
+			}
+
+			// 检查是否为 JSON-RPC 2.0
+			if (cJSON_GetObjectItem(payload, "jsonrpc") == NULL) {
+				ESP_LOGW(TAG, "MCP payload missing jsonrpc");
+				cJSON_Delete(root);
+				return;
+			}
+
+			// 提取 id, method, params
+			cJSON *id = cJSON_GetObjectItem(payload, "id");
+			cJSON *method = cJSON_GetObjectItem(payload, "method");
+			cJSON *params = cJSON_GetObjectItem(payload, "params");
+
+			if (!method || !cJSON_IsString(method)) {
+				send_mcp_error(s_client, id, -32600, "Invalid Request");
+				cJSON_Delete(root);
+				return;
+			}
+
+			const char *method_str = method->valuestring;
+
+			// ----- initialize -----
+			if (strcmp(method_str, "initialize") == 0) {
+				ESP_LOGI(TAG, "Process MCP initialize");
+				// 构造响应 result 对象
+				cJSON *result = cJSON_CreateObject();
+				cJSON_AddStringToObject(result, "protocolVersion", "2024-11-05");
+				cJSON *cap = cJSON_CreateObject();
+				cJSON_AddItemToObject(cap, "tools", cJSON_CreateObject());
+				cJSON_AddItemToObject(result, "capabilities", cap);
+				cJSON *info = cJSON_CreateObject();
+				cJSON_AddStringToObject(info, "name", "ESP32");
+				cJSON_AddStringToObject(info, "version", "1.0.0");
+				cJSON_AddItemToObject(result, "serverInfo", info);
+
+				// 构造完整响应（外层 type + payload）
+				cJSON *response = cJSON_CreateObject();
+				cJSON_AddStringToObject(response, "type", "mcp");
+				cJSON *payload_resp = cJSON_CreateObject();
+				cJSON_AddStringToObject(payload_resp, "jsonrpc", "2.0");
+				if (id) cJSON_AddItemToObject(payload_resp, "id", cJSON_Duplicate(id, 1));
+				cJSON_AddItemToObject(payload_resp, "result", result);
+				cJSON_AddItemToObject(response, "payload", payload_resp);
+
+				char *resp_str = cJSON_PrintUnformatted(response);
+				if (resp_str) {
+					esp_websocket_client_send_text(s_client, resp_str, strlen(resp_str), portMAX_DELAY);
+					free(resp_str);
+				}
+				cJSON_Delete(response);
+				ESP_LOGI(TAG, "Sent MCP initialize response");
+			}
+			// ----- tools/list -----
+			else if (strcmp(method_str, "tools/list") == 0) {
+				ESP_LOGI(TAG, "Process MCP tools/list");
+				cJSON *result = cJSON_CreateObject();
+				cJSON *tools_array = cJSON_CreateArray();
+				for (int i = 0; i < s_mcp_tool_count; i++) {
+					cJSON *tool_obj = cJSON_CreateObject();
+					cJSON_AddStringToObject(tool_obj, "name", s_mcp_tools[i].name);
+					cJSON_AddStringToObject(tool_obj, "description", s_mcp_tools[i].description);
+					if (s_mcp_tools[i].input_schema) {
+						cJSON_AddItemToObject(tool_obj, "inputSchema", cJSON_Duplicate(s_mcp_tools[i].input_schema, 1));
+					} else {
+						cJSON_AddItemToObject(tool_obj, "inputSchema", cJSON_CreateObject());
+					}
+					cJSON_AddItemToArray(tools_array, tool_obj);
+				}
+				cJSON_AddItemToObject(result, "tools", tools_array);
+
+				cJSON *response = cJSON_CreateObject();
+				cJSON_AddStringToObject(response, "type", "mcp");
+				cJSON *payload_resp = cJSON_CreateObject();
+				cJSON_AddStringToObject(payload_resp, "jsonrpc", "2.0");
+				if (id) cJSON_AddItemToObject(payload_resp, "id", cJSON_Duplicate(id, 1));
+				cJSON_AddItemToObject(payload_resp, "result", result);
+				cJSON_AddItemToObject(response, "payload", payload_resp);
+
+				char *resp_str = cJSON_PrintUnformatted(response);
+				if (resp_str) {
+					esp_websocket_client_send_text(s_client, resp_str, strlen(resp_str), portMAX_DELAY);
+					free(resp_str);
+				}
+				cJSON_Delete(response);
+				ESP_LOGI(TAG, "Sent tools/list response with %d tools", s_mcp_tool_count);
+			}
+			// ----- tools/call -----
+			else if (strcmp(method_str, "tools/call") == 0) {
+				ESP_LOGI(TAG, "Process MCP tools/call");
+				if (!params || !cJSON_IsObject(params)) {
+					send_mcp_error(s_client, id, -32602, "Invalid params");
+					cJSON_Delete(root);
+					return;
+				}
+				cJSON *name_json = cJSON_GetObjectItem(params, "name");
+				cJSON *args = cJSON_GetObjectItem(params, "arguments");
+				if (!name_json || !cJSON_IsString(name_json)) {
+					send_mcp_error(s_client, id, -32602, "Invalid tool name");
+					cJSON_Delete(root);
+					return;
+				}
+				const char *tool_name = name_json->valuestring;
+				mcp_tool_t *tool = mcp_find_tool(tool_name);
+				if (!tool) {
+					send_mcp_error(s_client, id, -32601, "Tool not found");
+					cJSON_Delete(root);
+					return;
+				}
+
+				cJSON *result_json = NULL;
+				esp_err_t err = tool->callback(args, &result_json);
+				if (err != ESP_OK || result_json == NULL) {
+					send_mcp_error(s_client, id, -32000, "Tool execution failed");
+					cJSON_Delete(root);
+					return;
+				}
+
+				// 构造响应
+				cJSON *response = cJSON_CreateObject();
+				cJSON_AddStringToObject(response, "type", "mcp");
+				cJSON *payload_resp = cJSON_CreateObject();
+				cJSON_AddStringToObject(payload_resp, "jsonrpc", "2.0");
+				if (id) cJSON_AddItemToObject(payload_resp, "id", cJSON_Duplicate(id, 1));
+				cJSON_AddItemToObject(payload_resp, "result", result_json);
+				cJSON_AddItemToObject(response, "payload", payload_resp);
+
+				char *resp_str = cJSON_PrintUnformatted(response);
+				if (resp_str) {
+					esp_websocket_client_send_text(s_client, resp_str, strlen(resp_str), portMAX_DELAY);
+					free(resp_str);
+				}
+				cJSON_Delete(response);
+			}
+			else {
+				// 其他方法
+				send_mcp_error(s_client, id, -32601, "Method not found");
+			}
+		}
+        
 	}
 	cJSON_Delete(root);
 }
@@ -310,8 +613,8 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
                 ESP_LOGI(TAG, "Received TEXT, len=%d", data->data_len);
 				user_jsontext_cb(data,client);
                 // 安全打印（限制长度避免刷屏）
-                // int print_len = (data->data_len > 256) ? 256 : data->data_len;
-                // printf("Text: %.*s\n", print_len, (char *)data->data_ptr);
+                int print_len = (data->data_len > 256) ? 256 : data->data_len;
+                printf("Text: %.*s\n", print_len, (char *)data->data_ptr);
             } else if (data->op_code == WS_TRANSPORT_OPCODES_BINARY) {
                 //ESP_LOGI(TAG, "Received BINARY, len=%d", data->data_len);
 				opus_binary_decorder_player(data);
@@ -443,4 +746,9 @@ void xiaozhi_client_send_opuspcm_stop(void)
 bool xiaozhi_client_send_text(const char *text)
 {
 	return send_listen(client,text);
+}
+
+void xiaozhi_client_stop_tts(void)
+{
+	stop_tts_play(client);
 }

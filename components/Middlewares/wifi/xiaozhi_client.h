@@ -21,4 +21,9 @@ void xiaozhi_client_send_opuspcm_start(uint32_t rec_time);
 void xiaozhi_client_send_opuspcm_stop(void);
 bool xiaozhi_client_send_text(const char *text);
 bool xiaozhi_client_recorder_running_status(void);
+
+
+void xiaozhi_client_stop_tts(void);
+
+void init_mcp_tools(void);
 #endif

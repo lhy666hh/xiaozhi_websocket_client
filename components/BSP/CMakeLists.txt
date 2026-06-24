@@ -22,7 +22,7 @@ set(requires
 			fatfs
 			sdmmc
 			esp_codec_dev
-			es8311
+			#es8311
 			lvgl
 			esp_websocket_client)
 

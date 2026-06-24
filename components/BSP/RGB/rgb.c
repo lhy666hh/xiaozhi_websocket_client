@@ -87,6 +87,7 @@ void ws2812_set_color(uint8_t r, uint8_t g, uint8_t b) {
 
 void rgb_init(void) {
   ws2812_rmt_init();
+  ws2812_set_color(0, 0, 0);
 }
 
 // void loop() {

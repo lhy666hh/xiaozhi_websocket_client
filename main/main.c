@@ -3,7 +3,7 @@
 #include "freertos/semphr.h"
 
 #include "rgb.h"
-#include "exit.h"
+// #include "exit.h"
 #include "uart.h"
 #include <string.h>
 #include <stdio.h>
@@ -31,9 +31,13 @@
 #include "audio_recorder.h"
 
 #include "esp_heap_caps.h"//动态堆检测库
+
+#include "cJSON.h"
+// #include "gui_guider.h"
+// #include "events_init.h"
+#include "lv_my_demo.h"
 static const char *TAG = "AUDIO_TEST";
 
-#define TEST_TAG "DRAW_AREA_TEST"
 
 
 
@@ -65,14 +69,24 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, char * pcTaskName ) {
 
 
 
-
+//lv_ui guider_ui;
 void lvgl_task(void *arg) {
 	//lv_demo_stress();
 	//lv_demo_widgets();
 	//ui_mjpeg_create();
-	ui_show_hz();
-	
 
+	font_init();
+	// ui_show_hz();
+	// if(get_status_mjpeg_show()==false)
+	// {
+	// 	start_mjpeg_show("/emotion/happy.mjpeg");
+	// }
+	// start_mjpeg_show("/emotion/happy.mjpeg");
+	
+	// setup_ui(&guider_ui);
+	// events_init(&guider_ui);
+	
+	lv_gui_start();
     while (1) {
         lv_timer_handler();
         vTaskDelay(5);
@@ -91,8 +105,7 @@ void app_main(void) {
 		ESP_ERROR_CHECK(nvs_flash_init());
 	}
 
-	rgb_init();
-    exit_init();
+	
     usart_init(115200);
 	printf("hello world!\n");
 	// 1. 挂载SD卡
@@ -122,11 +135,11 @@ void app_main(void) {
 		//初始化音频播放器
 		if(audio_player_init()==ESP_OK)
 		{
-			if(audio_player_set_volume(40)==ESP_OK)
+			if(audio_player_set_volume(10)==ESP_OK)
 			{
 				//test_pcm_player();
 				// 播放 SD 卡中的文件（循环）
-				//audio_player_play("/sdcard/demo1.wav", false);
+				audio_player_play("/sdcard/start_music.wav", false);
 
 				//record_callback(60);
 				//record_pcm_to_queue(60,16000,16,1,audio_player_push_pcm);
@@ -164,54 +177,56 @@ void app_main(void) {
 	{
 
 	}
-	
+	rgb_init();
 	// // mqtt_start();
 	//vTaskDelay(pdMS_TO_TICKS(1000));
 
+	init_mcp_tools();
 	
 	
-	// 启动 WebSocket 客户端
-	xiaozhi_client_config_and_start();
 
-	write_text_to_label(" !#$%&'()*+,-./:;<=>?@[\]^_`{|}~");
+	
+    // exit_init();
 	while(1)
 	{
-		static bool oldsta = false;
-		bool newsta = xiaozhi_client_recorder_running_status();
+		// static bool oldsta = false;
+		// bool newsta = xiaozhi_client_recorder_running_status();
 
-		if(newsta!=oldsta)
-		{
-			oldsta = newsta;
-			if(oldsta)ws2812_set_color(0, 50, 0);
-			else ws2812_set_color(0, 0, 0);
-		}
+		// if(newsta!=oldsta)
+		// {
+		// 	oldsta = newsta;
+		// 	if(oldsta)ws2812_set_color(0, 50, 0);
+		// 	else ws2812_set_color(0, 0, 0);
+		// }
 
-		vTaskDelay(pdMS_TO_TICKS(20));
-		KEY_STA key_val = get_exit_key_flag();
-		if(key_val == BOOT_PRESS)
-		{
+		// vTaskDelay(pdMS_TO_TICKS(20));
+		// KEY_STA key_val = get_exit_key_flag();
+		// if(key_val == BOOT_PRESS)
+		// {
 			
-			if(xiaozhi_client_is_connected()==false)
-			{
-				debug_memory_leak();
-				ws2812_set_color(0, 0, 50);
-				ESP_LOGI(TAG, "WebSocket Reconnect!");
-				xiaozhi_client_config_and_start();
-				vTaskDelay(pdMS_TO_TICKS(2000));
-			}
+		// 	if(xiaozhi_client_is_connected()==false)
+		// 	{
+		// 		debug_memory_leak();
+		// 		ws2812_set_color(0, 0, 50);
+		// 		ESP_LOGI(TAG, "WebSocket Reconnect!");
+		// 		xiaozhi_client_config_and_start();
+		// 		vTaskDelay(pdMS_TO_TICKS(2000));
+		// 	}
 
-			// xiaozhi_client_send_opuspcm_start(5);
-			//xiaozhi_client_send_text("开灯");
-			xiaozhi_client_send_text("当前温度湿度为多少");
-		}
-		else if(key_val == BOOT_RELEASE)
-		{
-			vTaskDelay(pdMS_TO_TICKS(500));
-			//xiaozhi_client_send_opuspcm_stop();
-		}
+		// 	// xiaozhi_client_send_opuspcm_start(5);
+		// 	//xiaozhi_client_send_text("开灯");
+		// 	xiaozhi_client_send_text("当前温度湿度为多少");
+		// }
+		// else if(key_val == BOOT_RELEASE)
+		// {
+		// 	vTaskDelay(pdMS_TO_TICKS(500));
+		// 	//xiaozhi_client_send_opuspcm_stop();
+		// }
+		vTaskDelay(pdMS_TO_TICKS(5000));
+		debug_memory_leak();
 	}
 	
-	xiaozhi_client_clear_and_stop();
+	
 
 
 	// 主任务可以干其他事情，或者直接删除自己

@@ -1,20 +1,29 @@
 set(src_dirs
 			jpeg
-			lvgl_ui)
+			lvgl_ui
+			MyDemo
+			wifi)
 
 set(include_dirs
 			jpeg
-			lvgl_ui)
+			lvgl_ui
+			MyDemo
+			wifi)
 
 set(requires
             driver
-			esp_timer
+			#esp_timer
 			fatfs
 			sdmmc
 			esp_codec_dev
-			es8311
+			#es8311
 			lvgl
-			BSP)
+			BSP
+			esp_wifi
+			mqtt
+			esp_websocket_client
+			cjson
+			micro-opus)
 
 
 idf_component_register(SRC_DIRS ${src_dirs}

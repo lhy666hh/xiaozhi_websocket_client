@@ -15,12 +15,17 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/esp_codec_dev: ^1.5.7
-  espressif/es8311: ^1.0.0
+  #espressif/es8311: ^1.0.0
   lvgl/lvgl: ^8.3.10
   espressif/esp_lvgl_port: '*'
   espressif/esp_lv_decoder: '*'
   espressif/cjson: ^1.0.0
   espressif/esp_websocket_client: ^1.6.0
   esphome/micro-opus: ^0.4.1
-  espressif/freetype: "^2.13.3~1"
+  #espressif/freetype: "^2.13.3~1"
   #78/esp-opus: ^1.0.5
+  #espressif/esp_service: ^0.5.1     # 核心服务框架[reference:1]
+  #espressif/esp_xiaozhi: ^0.1.0
+  #espressif/mcp-c-sdk: =*
+  #espressif/brookesia_agent_xiaozhi: ^0.7.4
+  

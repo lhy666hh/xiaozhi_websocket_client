@@ -6,7 +6,6 @@
 #include "driver/i2s_std.h"
 #include "sdkconfig.h"
 #include "esp_system.h"
-#include "es8311.h"
 
 #include "driver/i2c_master.h"
 
@@ -18,7 +17,7 @@ i2s_chan_handle_t tx_handle = NULL;
 i2s_chan_handle_t rx_handle = NULL;   // 接收通道句柄
 
 
-es8311_handle_t es_handle;
+
 static uint32_t cur_sample_rate = 44100;
 static uint16_t cur_bits_per_sample = 16;
 static uint16_t cur_channels = 2;
@@ -344,6 +343,8 @@ esp_err_t audio_code_reconfigi2s(uint32_t sample_rate, uint16_t bits_per_sample,
 // }
 
 #else
+#include "es8311.h"
+es8311_handle_t es_handle;
 // static esp_err_t bsp_i2c_init(void)
 // {
 //     i2c_config_t i2c_conf = {
@@ -463,18 +464,18 @@ esp_err_t audio_code_reconfigi2s(uint32_t sample_rate, uint16_t bits_per_sample,
 
 
 // 初始化GPIO42为PA使能引脚并置低使能
-static void pa_gpio_init(void)
-{
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << PA_EN_GPIO_NUM),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_conf);
-    gpio_set_level(PA_EN_GPIO_NUM, 1);//拉高关闭
-}
+// static void pa_gpio_init(void)
+// {
+//     gpio_config_t io_conf = {
+//         .pin_bit_mask = (1ULL << PA_EN_GPIO_NUM),
+//         .mode = GPIO_MODE_OUTPUT,
+//         .pull_up_en = GPIO_PULLUP_DISABLE,
+//         .pull_down_en = GPIO_PULLDOWN_DISABLE,
+//         .intr_type = GPIO_INTR_DISABLE,
+//     };
+//     gpio_config(&io_conf);
+//     gpio_set_level(PA_EN_GPIO_NUM, 1);//拉高关闭
+// }
 
 
 
@@ -525,7 +526,7 @@ static void pa_gpio_init(void)
 
 esp_err_t audio_code_init(void)
 {
-	pa_gpio_init();
+	//pa_gpio_init();
 	ESP_RETURN_ON_ERROR(i2s_driver_init(), TAG, "I2S driver init failed");
 	ESP_RETURN_ON_ERROR(es8311_codec_init(), TAG, "ES8311 init failed");
 	// 开始静音处理

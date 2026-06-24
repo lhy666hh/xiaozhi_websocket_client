@@ -89,7 +89,7 @@ static void pcm_data_handler_task(void *arg)
 		}
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
         // 尝试从队列接收数据（非阻塞，因为时间到了必须发送一帧，即使丢弃）
-        if (xQueueReceive(s_pcm_queue, &pcm_block, 0) == pdTRUE) {
+        if (xQueueReceive(s_pcm_queue, &pcm_block, 60) == pdTRUE) {
             // 处理数据（编码并发送）
 			if(pcm_block.pcm_dat)
 			{
